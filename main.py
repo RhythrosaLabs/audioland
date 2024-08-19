@@ -5,6 +5,27 @@ from pydub import AudioSegment
 from pydub.playback import play
 import io
 
+# GPT-4o-mini powered generation function
+def generate_text(prompt):
+    response = openai.Completion.create(
+        engine="gpt-4o-mini",
+        prompt=prompt,
+        max_tokens=150
+    )
+    return response.choices[0].text.strip()
+
+# Function to generate music using Replicate's MusicGen model
+def generate_music(prompt, replicate_client):
+    music_model = replicate_client.models.get("meta/musicgen")
+    output = music_model.predict(prompt=prompt)
+    return output['audio']
+
+# Function to convert text to speech
+def text_to_speech(text, replicate_client):
+    speech_model = replicate_client.models.get("coqui-ai/coqui_tts")
+    output = speech_model.predict(text=text)
+    return output['audio']
+
 # Streamlit app UI
 def main():
     st.title("Audio App powered by GPT-4o-mini and Other Technologies")
@@ -32,13 +53,13 @@ def main():
         elif option == "Generate Music":
             prompt = st.text_input("Enter a music prompt")
             if st.button("Generate"):
-                generated_music = generate_music(prompt)
+                generated_music = generate_music(prompt, replicate_client)
                 st.audio(generated_music, format='audio/mp3')
 
         elif option == "Text to Speech":
             text = st.text_area("Enter text to convert to speech")
             if st.button("Convert"):
-                tts_audio = text_to_speech(text)
+                tts_audio = text_to_speech(text, replicate_client)
                 st.audio(tts_audio, format='audio/mp3')
 
         elif option == "Upload & Process Audio":
@@ -50,32 +71,6 @@ def main():
                 st.write("Processing functionality to be added.")
     else:
         st.sidebar.warning("Please enter your OpenAI and Replicate API keys to proceed.")
-
-# GPT-4o-mini powered generation function
-def generate_text(prompt):
-    response = openai.Completion.create(
-        engine="gpt-4o-mini",
-        prompt=prompt,
-        max_tokens=150
-    )
-    return response.choices[0].text.strip()
-
-# Function to generate music using Replicate's MusicGen model
-def generate_music(prompt):
-    music_model = replicate_client.models.get("meta/musicgen")
-    output = music_model.predict(prompt=prompt)
-    return output['audio']
-
-# Function to convert text to speech
-def text_to_speech(text):
-    speech_model = replicate_client.models.get("coqui-ai/coqui_tts")
-    output = speech_model.predict(text=text)
-    return output['audio']
-
-# Function to play audio
-def play_audio(audio_data):
-    audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
-    play(audio_segment)
 
 if __name__ == "__main__":
     main()
