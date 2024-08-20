@@ -59,15 +59,27 @@ def apply_envelope(audio, attack, decay, sustain, release):
     attack_samples = int(attack * total_samples)
     decay_samples = int(decay * total_samples)
     sustain_samples = int(sustain * total_samples)
-    release_samples = int(release * total_samples)
+    release_samples = total_samples - attack_samples - decay_samples - sustain_samples
     
-    envelope = np.zeros_like(audio)
-    envelope[:attack_samples] = np.linspace(0, 1, attack_samples)
-    envelope[attack_samples:attack_samples+decay_samples] = np.linspace(1, 0.5, decay_samples)
+    envelope = np.ones_like(audio)
+    
+    # Attack
+    if attack_samples > 0:
+        envelope[:attack_samples] = np.linspace(0, 1, attack_samples)
+    
+    # Decay
+    if decay_samples > 0:
+        envelope[attack_samples:attack_samples+decay_samples] = np.linspace(1, 0.5, decay_samples)
+    
+    # Sustain
     envelope[attack_samples+decay_samples:attack_samples+decay_samples+sustain_samples] = 0.5
-    envelope[attack_samples+decay_samples+sustain_samples:] = np.linspace(0.5, 0, release_samples)
+    
+    # Release
+    if release_samples > 0:
+        envelope[-release_samples:] = np.linspace(0.5, 0, release_samples)
     
     return audio * envelope
+
 
 # Plot waveform with dark theme
 def plot_waveform(audio, sample_rate):
