@@ -12,7 +12,6 @@ from datetime import datetime
 import requests
 import shutil
 import librosa
-import sounddevice as sd
 import threading
 import time
 from scipy.signal import convolve
@@ -287,15 +286,13 @@ def mix_audio(channels):
 def play_audio():
     if st.session_state.playback['audio'] is not None:
         st.session_state.playback['is_playing'] = True
-        start_position = int(st.session_state.playback['current_position'] * st.session_state.playback['sample_rate'])
-        sd.play(st.session_state.playback['audio'][start_position:], st.session_state.playback['sample_rate'])
+        # Instead of playing audio, we'll just update the state
+        # The audio will be played using Streamlit's audio component
 
 def pause_audio():
-    sd.stop()
     st.session_state.playback['is_playing'] = False
 
 def stop_audio():
-    sd.stop()
     st.session_state.playback['is_playing'] = False
     st.session_state.playback['current_position'] = 0
 
@@ -308,6 +305,7 @@ def update_position():
             else:
                 stop_audio()
         time.sleep(0.1)
+        st.experimental_rerun()  # This will update the UI
 
 # Global transport UI
 def render_global_transport():
@@ -351,220 +349,4 @@ with tab1:
     frequency = st.slider("Frequency (Hz)", 20, 2000, 440)
     duration = st.slider("Duration (seconds)", 0.1, 5.0, 1.0)
 
-    st.subheader("Envelope Settings")
-    attack = st.slider("Attack", 0.0, 1.0, 0.1)
-    decay = st.slider("Decay", 0.0, 1.0, 0.1)
-    sustain = st.slider("Sustain", 0.0, 1.0, 0.5)
-    release = st.slider("Release", 0.0, 1.0, 0.3)
-
-    if st.button("Generate Sound"):
-        if waveform == "Sine":
-            audio = generate_sine_wave(frequency, duration)
-        elif waveform == "Square":
-            audio = generate_square_wave(frequency, duration)
-        else:
-            audio = generate_sawtooth_wave(frequency, duration)
-        
-        audio = apply_envelope(audio, attack, decay, sustain, release)
-        
-        # Normalize audio
-        audio = audio / np.max(np.abs(audio))
-        
-        # Save audio to a BytesIO object
-        buffer = io.BytesIO()
-        sf.write(buffer, audio, 44100, format='WAV')
-        buffer.seek(0)
-        
-        # Display audio player
-        st.audio(buffer, format='audio/wav')
-        
-        # Provide download link
-        st.download_button(
-            label="Download WAV",
-            data=buffer,
-            file_name="generated_sound.wav",
-            mime="audio/wav"
-        )
-
-        # Plot waveform
-        st.pyplot(plot_waveform(audio, 44100))
-
-        # Save to session state option
-        save_name = st.text_input("Save sound as:")
-        if st.button("Save Sound"):
-            save_sound(save_name, audio, 44100)
-            st.success(f"Saved {save_name} to library!")
-
-with tab2:
-    st.header("Sound Library")
-    
-    saved_sounds = list_saved_sounds()
-    if saved_sounds:
-        selected_sound = st.selectbox("Select a saved sound", saved_sounds)
-        if st.button("Load Sound"):
-            audio, sample_rate = load_sound(selected_sound)
-            
-            # Create a buffer for the loaded sound
-            buffer = io.BytesIO()
-            sf.write(buffer, audio, sample_rate, format='WAV')
-            buffer.seek(0)
-            
-            # Display audio player for the loaded sound
-            st.audio(buffer, format='audio/wav')
-            
-            # Plot waveform of the loaded sound
-            st.pyplot(plot_waveform(audio, sample_rate))
-    else:
-        st.write("No saved sounds found in the library.")
-
-with tab3:
-    st.header("Random Samples Generator")
-    
-    if st.button("Generate Random Samples"):
-        with st.spinner("Generating random samples..."):
-            samples, sequence = generate_random_samples_and_sequence()
-        
-        st.success("Random samples generated successfully!")
-        
-        # Display individual samples
-        st.subheader("Individual Samples")
-        for i, sample in enumerate(samples):
-            st.audio(sample, format='audio/wav')
-            st.download_button(
-                label=f"Download Sample {i+1}",
-                data=sample,
-                file_name=f"random_sample_{i+1}.wav",
-                mime="audio/wav"
-            )
-        
-        # Display musical sequence
-        st.subheader("Musical Sequence")
-        st.audio(sequence, format='audio/wav')
-        st.download_button(
-            label="Download Musical Sequence",
-            data=sequence,
-            file_name="musical_sequence.wav",
-            mime="audio/wav"
-        )
-
-with tab4:
-    st.header("Drum Loop Generator")
-    
-    tempo = st.slider("Tempo (BPM)", 60, 200, 120)
-    beat_length = st.slider("Beat Length", 4, 32, 16)
-    
-    if st.button("Generate Drum Loop"):
-        with st.spinner("Generating drum loop..."):
-            generator = DrumLoopGenerator(tempo=tempo, beat_length=beat_length)
-            drum_loop = generator.generate_loop()
-        
-        st.success("Drum loop generated successfully!")
-        
-        # Display drum loop
-        st.audio(drum_loop, format='audio/wav')
-        st.download_button(
-            label="Download Drum Loop",
-            data=drum_loop,
-            file_name="drum_loop.wav",
-            mime="audio/wav"
-        )
-
-with tab5:
-    st.header("AI Music Generator")
-    
-    st.warning("Make sure you've entered and saved your Replicate API key in the sidebar before generating music.")
-    
-    input_text = st.text_area("Enter a prompt for the music:", "An upbeat electronic dance track with a catchy melody")
-    duration = st.slider("Duration (seconds)", 5, 60, 30)
-    model = st.selectbox("Select AI Model", ["Meta MusicGen", "Loop Test"])
-    
-    if st.button("Generate Music"):
-        generate_music(input_text, duration, model)
-
-with tab6:
-    st.header("8-Channel Mixer with Effects")
-    
-    # BPM setting
-    st.session_state.playback['bpm'] = st.number_input("BPM", min_value=1, max_value=300, value=st.session_state.playback['bpm'])
-    
-    # Channel controls
-    for i in range(8):
-        st.subheader(f"Channel {i+1}")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            uploaded_file = st.file_uploader(f"Import audio for channel {i+1}", type=['wav', 'mp3'])
-            if uploaded_file is not None:
-                file_contents = uploaded_file.read()
-                with open(os.path.join(WORK_DIR, uploaded_file.name), 'wb') as f:
-                    f.write(file_contents)
-                st.session_state.mixer_channels[i]['file'] = os.path.join(WORK_DIR, uploaded_file.name)
-                st.success(f"File uploaded and saved: {uploaded_file.name}")
-        
-        with col2:
-            st.session_state.mixer_channels[i]['volume'] = st.slider(f"Volume {i+1}", 0.0, 1.0, 1.0, key=f"vol_{i}")
-        
-        with col3:
-            st.session_state.mixer_channels[i]['pan'] = st.slider(f"Pan {i+1}", -1.0, 1.0, 0.0, key=f"pan_{i}")
-        
-        # Effects
-        st.session_state.mixer_channels[i]['pitch_shift'] = st.slider(f"Pitch Shift {i+1} (semitones)", -12, 12, 0, key=f"pitch_{i}")
-        st.session_state.mixer_channels[i]['reverb'] = st.slider(f"Reverb {i+1}", 0.0, 1.0, 0.0, key=f"reverb_{i}")
-        st.session_state.mixer_channels[i]['delay'] = st.slider(f"Delay {i+1} (seconds)", 0.0, 1.0, 0.0, key=f"delay_{i}")
-        st.session_state.mixer_channels[i]['distortion'] = st.slider(f"Distortion {i+1}", 0.0, 1.0, 0.0, key=f"dist_{i}")
-        st.session_state.mixer_channels[i]['low_pass'] = st.slider(f"Low Pass {i+1} (Hz)", 20, 22050, 22050, key=f"lp_{i}")
-        st.session_state.mixer_channels[i]['high_pass'] = st.slider(f"High Pass {i+1} (Hz)", 20, 22050, 20, key=f"hp_{i}")
-        st.session_state.mixer_channels[i]['reverse'] = st.checkbox(f"Reverse {i+1}", key=f"rev_{i}")
-    
-    if st.button("Mix Audio"):
-        mixed_channels = []
-        for ch in st.session_state.mixer_channels:
-            if ch['file'] is not None:
-                audio, sample_rate = load_audio_file(ch['file'])
-                mixed_channels.append({
-                    'audio': audio,
-                    'sample_rate': sample_rate,
-                    'volume': ch['volume'],
-                    'pan': ch['pan'],
-                    'pitch_shift': ch['pitch_shift'],
-                    'reverb': ch['reverb'],
-                    'delay': ch['delay'],
-                    'distortion': ch['distortion'],
-                    'low_pass': ch['low_pass'],
-                    'high_pass': ch['high_pass'],
-                    'reverse': ch['reverse']
-                })
-        
-        if mixed_channels:
-            mixed_audio = mix_audio(mixed_channels)
-            mixed_filepath = autosave_audio(mixed_audio, sample_rate, "mixed_audio")
-            st.success(f"Mixed audio saved: {mixed_filepath}")
-            
-            # Update playback state
-            st.session_state.playback['audio'] = mixed_audio
-            st.session_state.playback['sample_rate'] = sample_rate
-            st.session_state.playback['current_position'] = 0
-            
-            # Display waveform
-            fig, ax = plt.subplots(figsize=(10, 2))
-            ax.plot(mixed_audio)
-            ax.set_xlabel('Samples')
-            ax.set_ylabel('Amplitude')
-            ax.set_title('Mixed Audio Waveform')
-            st.pyplot(fig)
-        else:
-            st.warning("No audio files loaded in the mixer channels.")
-
-# Render global transport
-render_global_transport()
-
-st.sidebar.title("Sound Design Suite")
-st.sidebar.info("Use the tabs to switch between different sound design tools.")
-
-# Cleanup function
-def cleanup_work_dir():
-    if os.path.exists(WORK_DIR):
-        shutil.rmtree(WORK_DIR)
-
-# Register the cleanup function to run when the app is closed
-st.on_script_run_end(cleanup_work_dir)
+    st.subheader("
