@@ -9,7 +9,6 @@ from drum_loop_generator import DrumLoopGenerator
 import os
 import replicate
 from datetime import datetime
-import threading
 import requests
 
 # Set page config
@@ -33,9 +32,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state for storing sounds
+# Initialize session state for storing sounds and API key
 if 'sounds' not in st.session_state:
     st.session_state.sounds = {}
+if 'replicate_api_key' not in st.session_state:
+    st.session_state.replicate_api_key = ''
+
 
 # Sound generation functions
 def generate_sine_wave(frequency, duration, sample_rate=44100):
@@ -89,6 +91,7 @@ def load_sound(name):
 def list_saved_sounds():
     return list(st.session_state.sounds.keys())
 
+# New functions for generative AI audio
 def load_api_key():
     return st.session_state.replicate_api_key
 
@@ -100,16 +103,18 @@ def download_file(url, filename):
     if response.status_code == 200:
         with open(filename, 'wb') as f:
             f.write(response.content)
+        return True
     else:
         st.error(f"Failed to download file: {response.status_code}")
+        return False
 
-def threaded_generate_music(input_text, duration, model):
+def generate_music(input_text, duration, model):
     api_key = load_api_key()
-    if api_key:
-        os.environ["REPLICATE_API_TOKEN"] = api_key
-    else:
+    if not api_key:
         st.error("Please enter your Replicate API key in the sidebar.")
         return
+
+    os.environ["REPLICATE_API_TOKEN"] = api_key
 
     model_input = {
         "prompt": input_text,
@@ -122,18 +127,26 @@ def threaded_generate_music(input_text, duration, model):
         model_id = "allenhung1025/looptest:0de4a5f14b9120ce02c590eb9cf6c94841569fafbc4be7ab37436ce738bcf49f"
 
     try:
-        output = replicate.run(model_id, input=model_input)
-        download_url = output
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        sanitized_input_text = "".join(e for e in input_text if e.isalnum())
-        filename = f"{sanitized_input_text[:30]}_{timestamp}.wav"
-        download_file(download_url, filename)
-        st.success(f"Music generated and saved as {filename}")
-        
-        # Load and play the generated audio
-        audio_file = open(filename, 'rb')
-        audio_bytes = audio_file.read()
-        st.audio(audio_bytes, format='audio/wav')
+        with st.spinner("Generating music... This may take a while."):
+            output = replicate.run(model_id, input=model_input)
+            if isinstance(output, list) and len(output) > 0:
+                download_url = output[0]
+            else:
+                download_url = output
+            
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            sanitized_input_text = "".join(e for e in input_text if e.isalnum())
+            filename = f"{sanitized_input_text[:30]}_{timestamp}.wav"
+            
+            if download_file(download_url, filename):
+                st.success(f"Music generated and saved as {filename}")
+                
+                # Load and play the generated audio
+                audio_file = open(filename, 'rb')
+                audio_bytes = audio_file.read()
+                st.audio(audio_bytes, format='audio/wav')
+            else:
+                st.error("Failed to download the generated audio file.")
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
 
