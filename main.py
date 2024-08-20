@@ -163,3 +163,35 @@ with tab2:
         st.write("No saved sounds found in the library.")
 
 with tab3:
+    st.header("Random Samples Generator")
+    
+    if st.button("Generate Random Samples"):
+        with st.spinner("Generating random samples..."):
+            samples, sequence = generate_random_samples_and_sequence()
+        
+        st.success("Random samples generated successfully!")
+        
+        # Display individual samples
+        st.subheader("Individual Samples")
+        for i, sample in enumerate(samples):
+            st.audio(sample, format='audio/wav')
+            st.download_button(
+                label=f"Download Sample {i+1}",
+                data=sample,
+                file_name=f"random_sample_{i+1}.wav",
+                mime="audio/wav"
+            )
+        
+        # Display musical sequence
+        st.subheader("Musical Sequence")
+        st.audio(sequence, format='audio/wav')
+        st.download_button(
+            label="Download Musical Sequence",
+            data=sequence,
+            file_name="musical_sequence.wav",
+            mime="audio/wav"
+        )
+
+st.sidebar.title("Sound Design Suite")
+st.sidebar.info("Use the tabs to switch between generating sounds, accessing the sound library, and creating random samples.")
+st.sidebar.warning("This is a demo version with limited features.")
