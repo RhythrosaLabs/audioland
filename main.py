@@ -4,8 +4,7 @@ import requests
 import tempfile
 import os
 from pydub import AudioSegment
-from pydub.effects import normalize, reverb, high_pass_filter, low_pass_filter
-import ffmpeg
+from pydub.effects import normalize, reverb
 
 # Function to generate music using Replicate's meta/musicgen model
 def generate_music(api_key, prompt, model_version, output_format, normalization_strategy):
@@ -38,7 +37,6 @@ def apply_effects(music_path, effects):
             audio = audio + audio.reverse().overlay(audio.reverse(), delay=100)
         if effect == "distortion":
             audio = audio + 10  # Increase volume for distortion
-            audio = low_pass_filter(audio, 800)  # Low-pass filter for distortion effect
     
     # Normalize the audio to avoid clipping
     audio = normalize(audio)
@@ -124,6 +122,3 @@ if st.button("Generate Music"):
                 st.error(f"An error occurred: {e}")
     else:
         st.error("Please enter a music prompt.")
-
-if __name__ == "__main__":
-    st.run()
