@@ -27,8 +27,8 @@ def generate_music(api_key, prompt, model_version, output_format, normalization_
 
 # Custom reverb effect function
 def custom_reverb(audio, delay=100):
-    reverb_audio = audio + audio.reverse().overlay(audio, delay=delay)
-    return reverb_audio
+    # Apply a simple reverb effect
+    return audio + audio.reverse().overlay(audio, delay=delay)
 
 # Function to apply effects to audio
 def apply_effects(music_path, effects):
@@ -51,13 +51,16 @@ def apply_effects(music_path, effects):
 
 # Function to save and download the file
 def save_and_download_file(file_path):
-    with open(file_path, 'rb') as f:
-        st.download_button(
-            label="Download Music",
-            data=f,
-            file_name=os.path.basename(file_path),
-            mime="audio/mpeg"
-        )
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as f:
+            st.download_button(
+                label="Download Music",
+                data=f,
+                file_name=os.path.basename(file_path),
+                mime="audio/mpeg"
+            )
+    else:
+        st.error("File not found for download.")
 
 # Streamlit UI
 st.title("AI Music Generator with Effects")
@@ -124,7 +127,7 @@ if st.session_state.music_url:
             processed_music_path = apply_effects(st.session_state.music_url, effects)
             if processed_music_path:
                 st.write("Effects applied successfully!")
-                st.audio(processed_music_path, format=f'audio/{output_format}')
+                st.audio(processed_music_path, format='audio/mp3')  # Ensure correct MIME type
 
                 # Export post-production result
                 save_and_download_file(processed_music_path)
