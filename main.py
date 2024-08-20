@@ -4,6 +4,7 @@ import soundfile as sf
 import io
 from scipy import signal
 import matplotlib.pyplot as plt
+from random_samples import generate_random_samples_and_sequence  # Import the new function
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
@@ -86,7 +87,7 @@ def list_saved_sounds():
 st.title("AI-Powered Sound Design Suite")
 
 # Tabs
-tab1, tab2 = st.tabs(["Sound Generator", "Sound Library"])
+tab1, tab2, tab3 = st.tabs(["Sound Generator", "Sound Library", "Random Samples"])
 
 with tab1:
     st.header("Waveform Generator")
@@ -161,6 +162,4 @@ with tab2:
     else:
         st.write("No saved sounds found in the library.")
 
-st.sidebar.title("Sound Design Suite")
-st.sidebar.info("Use the tabs to switch between generating sounds and accessing the sound library.")
-st.sidebar.warning("This is a demo version with limited features.")
+with tab3:
