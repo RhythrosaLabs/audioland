@@ -74,7 +74,7 @@ replicate_api_key = st.text_input("Enter your Replicate API key:", type="passwor
 
 # User input
 text_prompt = st.text_area("Enter your music prompt:")
-model_version = st.selectbox("Select model version:", ["small", "medium", "large", "stereo-large"])
+model_version = st.selectbox("Select model version:", ["stereo-melody-large", "stereo-large", "melody-large", "large"])
 output_format = st.selectbox("Select output format:", ["mp3", "wav"])
 normalization_strategy = st.selectbox("Select normalization strategy:", ["peak", "rms"])
 
