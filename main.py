@@ -4,7 +4,6 @@ import soundfile as sf
 import io
 from scipy import signal
 import matplotlib.pyplot as plt
-import os
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
@@ -26,6 +25,10 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Initialize session state for storing sounds
+if 'sounds' not in st.session_state:
+    st.session_state.sounds = {}
 
 # Sound generation functions
 def generate_sine_wave(frequency, duration, sample_rate=44100):
@@ -69,25 +72,21 @@ def plot_waveform(audio, sample_rate):
     plt.ylim(-1, 1)
     return plt
 
-# Directory functions
+# Session state functions
 def save_sound(name, audio, sample_rate):
-    if not os.path.exists('sounds'):
-        os.makedirs('sounds')
-    sf.write(f'sounds/{name}.wav', audio, sample_rate)
+    st.session_state.sounds[name] = {'audio': audio, 'sample_rate': sample_rate}
 
 def load_sound(name):
-    return sf.read(f'sounds/{name}.wav')
+    return st.session_state.sounds[name]['audio'], st.session_state.sounds[name]['sample_rate']
 
 def list_saved_sounds():
-    if not os.path.exists('sounds'):
-        return []
-    return [f.split('.')[0] for f in os.listdir('sounds') if f.endswith('.wav')]
+    return list(st.session_state.sounds.keys())
 
 # Main app
 st.title("AI-Powered Sound Design Suite")
 
 # Tabs
-tab1, tab2 = st.tabs(["Sound Generator", "Sound Directory"])
+tab1, tab2 = st.tabs(["Sound Generator", "Sound Library"])
 
 with tab1:
     st.header("Waveform Generator")
@@ -134,14 +133,14 @@ with tab1:
         # Plot waveform
         st.pyplot(plot_waveform(audio, 44100))
 
-        # Save to directory option
-        save_name = st.text_input("Save to directory as:")
-        if st.button("Save to Directory"):
+        # Save to session state option
+        save_name = st.text_input("Save sound as:")
+        if st.button("Save Sound"):
             save_sound(save_name, audio, 44100)
-            st.success(f"Saved {save_name} to directory!")
+            st.success(f"Saved {save_name} to library!")
 
 with tab2:
-    st.header("Sound Directory")
+    st.header("Sound Library")
     
     saved_sounds = list_saved_sounds()
     if saved_sounds:
@@ -160,8 +159,8 @@ with tab2:
             # Plot waveform of the loaded sound
             st.pyplot(plot_waveform(audio, sample_rate))
     else:
-        st.write("No saved sounds found in the directory.")
+        st.write("No saved sounds found in the library.")
 
 st.sidebar.title("Sound Design Suite")
-st.sidebar.info("Use the tabs to switch between generating sounds and accessing the sound directory.")
+st.sidebar.info("Use the tabs to switch between generating sounds and accessing the sound library.")
 st.sidebar.warning("This is a demo version with limited features.")
