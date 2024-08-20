@@ -4,7 +4,7 @@ import requests
 import tempfile
 import os
 from pydub import AudioSegment
-from pydub.effects import normalize, reverb
+from pydub.effects import normalize
 
 # Function to generate music using Replicate's meta/musicgen model
 def generate_music(api_key, prompt, model_version, output_format, normalization_strategy):
@@ -24,6 +24,11 @@ def generate_music(api_key, prompt, model_version, output_format, normalization_
     
     return output
 
+# Custom reverb effect function
+def custom_reverb(audio, delay=100):
+    reverb_audio = audio + audio.reverse().overlay(audio, delay=delay)
+    return reverb_audio
+
 # Function to apply effects to audio
 def apply_effects(music_path, effects):
     # Load the audio file using pydub
@@ -32,7 +37,7 @@ def apply_effects(music_path, effects):
     # Apply selected effects
     for effect in effects:
         if effect == "reverb":
-            audio = reverb(audio)
+            audio = custom_reverb(audio)
         if effect == "echo":
             audio = audio + audio.reverse().overlay(audio.reverse(), delay=100)
         if effect == "distortion":
