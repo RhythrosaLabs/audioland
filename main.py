@@ -8,20 +8,35 @@ import matplotlib.pyplot as plt
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
 
-# Custom CSS
+# Custom CSS for dark theme
 st.markdown("""
 <style>
     .stApp {
-        max-width: 1200px;
-        margin: 0 auto;
+        background-color: #0E1117;
+        color: #FAFAFA;
     }
     .stTabs {
-        background-color: #f0f2f6;
+        background-color: #262730;
         padding: 20px;
         border-radius: 10px;
     }
     .stButton>button {
         width: 100%;
+        background-color: #4CAF50;
+        color: white;
+    }
+    .stSlider>div>div>div {
+        background-color: #4CAF50;
+    }
+    .stSelectbox>div>div {
+        background-color: #262730;
+        color: #FAFAFA;
+    }
+    .css-145kmo2 {
+        color: #FAFAFA;
+    }
+    .css-1d391kg {
+        background-color: #262730;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -54,15 +69,18 @@ def apply_envelope(audio, attack, decay, sustain, release):
     
     return audio * envelope
 
-# Plot waveform
+# Plot waveform with dark theme
 def plot_waveform(audio, sample_rate):
+    plt.style.use('dark_background')
     fig, ax = plt.subplots(figsize=(10, 4))
     time = np.arange(0, len(audio)) / sample_rate
-    ax.plot(time, audio)
+    ax.plot(time, audio, color='#4CAF50')
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Amplitude')
     ax.set_title('Waveform')
-    ax.grid(True)
+    ax.grid(True, color='#555555')
+    fig.patch.set_facecolor('#0E1117')
+    ax.set_facecolor('#262730')
     return fig
 
 # Main app
