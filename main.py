@@ -297,13 +297,7 @@ with tab5:
     model = st.selectbox("Select AI Model", ["Meta MusicGen", "Loop Test"])
     
     if st.button("Generate Music"):
-        if not load_api_key():
-            st.error("Please enter your Replicate API key in the sidebar.")
-        else:
-            with st.spinner("Generating music... This may take a while."):
-                threading.Thread(target=threaded_generate_music, args=(input_text, duration, model)).start()
-
+        generate_music(input_text, duration, model)
 
 st.sidebar.title("Sound Design Suite")
-st.sidebar.info("Use the tabs to switch between generating sounds, accessing the sound library, creating random samples, and generating drum loops.")
-st.sidebar.warning("This is a demo version with limited features.")
+st.sidebar.info("Use the tabs to switch between different sound design tools.")
