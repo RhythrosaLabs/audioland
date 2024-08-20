@@ -27,7 +27,6 @@ def generate_music(api_key, prompt, model_version, output_format, normalization_
 
 # Custom reverb effect function
 def custom_reverb(audio, delay=100):
-    # Apply a simple reverb effect
     return audio + audio.reverse().overlay(audio, delay=delay)
 
 # Function to apply effects to audio
@@ -57,7 +56,7 @@ def save_and_download_file(file_path):
                 label="Download Music",
                 data=f,
                 file_name=os.path.basename(file_path),
-                mime="audio/mpeg"
+                mime="audio/mp3"  # Ensure the MIME type is correct for MP3
             )
     else:
         st.error("File not found for download.")
@@ -97,11 +96,15 @@ if st.button("Generate Music"):
                     st.write("Music generated successfully!")
                     music_path = tempfile.mktemp(suffix=f".{output_format}")
                     response = requests.get(music_url)
-                    with open(music_path, 'wb') as f:
-                        f.write(response.content)
                     
-                    st.session_state.music_url = music_path
-                    st.audio(music_path, format=f'audio/{output_format}')
+                    if response.status_code == 200:
+                        with open(music_path, 'wb') as f:
+                            f.write(response.content)
+                        
+                        st.session_state.music_url = music_path
+                        st.audio(music_path, format=f'audio/{output_format}')
+                    else:
+                        st.error(f"Failed to download the music. Status code: {response.status_code}")
                 else:
                     st.error("Failed to generate music. Please try again.")
             except Exception as e:
