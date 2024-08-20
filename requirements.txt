@@ -3,6 +3,5 @@ numpy
 scipy
 matplotlib
 soundfile
-librosa
 sounddevice
 pydub
