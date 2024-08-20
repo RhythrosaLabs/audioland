@@ -15,6 +15,9 @@ import librosa
 import threading
 import time
 from scipy.signal import convolve
+import mido
+from mido import Message, MidiFile, MidiTrack
+import random
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
@@ -307,6 +310,28 @@ def update_position():
         time.sleep(0.1)
         st.experimental_rerun()  # This will update the UI
 
+# Add this function for MIDI generation
+def generate_random_midi(num_notes=50, ticks_per_beat=480):
+    mid = MidiFile()
+    track = MidiTrack()
+    mid.tracks.append(track)
+    
+    track.append(Message('program_change', program=random.randint(0, 127), time=0))
+    
+    for i in range(num_notes):
+        note = random.randint(60, 84)  # C4 to C6
+        velocity = random.randint(64, 127)  # medium to loud
+        duration = random.randint(ticks_per_beat // 4, ticks_per_beat * 2)  # 1/16 note to 2 beats
+        
+        # Note on
+        track.append(Message('note_on', note=note, velocity=velocity, time=random.randint(0, ticks_per_beat // 2) if i > 0 else 0))
+        
+        # Note off
+        track.append(Message('note_off', note=note, velocity=0, time=duration))
+    
+    return mid
+
+
 # Global transport UI
 def render_global_transport():
     st.markdown('<div class="global-transport">', unsafe_allow_html=True)
@@ -340,8 +365,8 @@ if st.sidebar.button("Save API Key"):
     st.sidebar.success("API key saved!")
 
 
-# Tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Sound Generator", "Sound Library", "Random Samples", "Drum Loop Generator", "AI Music Generator", "Mixer"])
+# Modify the tabs section to include the new MIDI Generator tab
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Sound Generator", "Sound Library", "Random Samples", "Drum Loop Generator", "AI Music Generator", "Mixer", "MIDI Generator"])
 
 with tab1:
     st.header("Waveform Generator")
@@ -561,6 +586,49 @@ with tab6:
             st.audio(buffer, format='audio/wav')
         else:
             st.warning("No audio files loaded in the mixer channels.")
+
+
+# Add this new tab for MIDI Generator
+with tab7:
+    st.header("Random MIDI Generator")
+    
+    num_notes = st.slider("Number of Notes", 10, 100, 50)
+    
+    if st.button("Generate Random MIDI"):
+        with st.spinner("Generating random MIDI sequence..."):
+            midi_data = generate_random_midi(num_notes)
+            
+            # Save MIDI file
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            midi_filename = f"random_midi_{timestamp}.mid"
+            midi_filepath = os.path.join(WORK_DIR, midi_filename)
+            midi_data.save(midi_filepath)
+            
+            st.success(f"Random MIDI sequence generated: {midi_filename}")
+            
+            # Provide download link
+            with open(midi_filepath, "rb") as f:
+                st.download_button(
+                    label="Download MIDI File",
+                    data=f,
+                    file_name=midi_filename,
+                    mime="audio/midi"
+                )
+            
+            # Display MIDI information
+            st.subheader("MIDI Sequence Information")
+            st.write(f"Number of tracks: {len(midi_data.tracks)}")
+            st.write(f"Number of notes: {num_notes}")
+            
+            # Display first few notes
+            st.subheader("First 10 Notes")
+            notes = []
+            for i, msg in enumerate(midi_data.tracks[0]):
+                if msg.type == 'note_on' and len(notes) < 10:
+                    notes.append(f"Note: {msg.note}, Velocity: {msg.velocity}")
+            for note in notes:
+                st.write(note)
+
 
 # Render global transport
 render_global_transport()
