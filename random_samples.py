@@ -3,6 +3,7 @@ from scipy.io.wavfile import write
 import scipy.signal
 import zipfile
 import os
+import io
 
 # Constants
 SAMPLE_RATE = 44100  # Sampling rate in Hz
@@ -10,10 +11,7 @@ DURATION = 2  # Duration of each sound effect in seconds
 NUM_FILES = 25  # Number of sound effects to generate
 SEQUENCE_LENGTH = 30  # Length of the musical sequence in seconds
 
-# Directory to store the temporary audio files
-TEMP_DIR = 'temp_audio_files'
-os.makedirs(TEMP_DIR, exist_ok=True)
-
+# We'll use BytesIO instead of temporary files
 def apply_reverb(signal, decay=0.5):
     """Apply a reverb effect with decay."""
     reverb = np.concatenate([signal, np.zeros(int(SAMPLE_RATE * 0.5))])
@@ -127,22 +125,25 @@ def generate_random_sound():
     
     return audio
 
-def create_audio_files():
-    """Create and save random audio files."""
-    for i in range(NUM_FILES):
+def create_random_samples():
+    """Create random audio samples and return as a list of BytesIO objects."""
+    samples = []
+    for _ in range(NUM_FILES):
         sound_data = generate_random_sound()
-        filename = os.path.join(TEMP_DIR, f'soundfx_{i+1}.wav')
-        write(filename, SAMPLE_RATE, sound_data)
+        buffer = io.BytesIO()
+        write(buffer, SAMPLE_RATE, sound_data)
+        buffer.seek(0)
+        samples.append(buffer)
+    return samples
 
-def create_musical_sequence():
-    """Create a musical sequence from the generated sound files."""
+def create_musical_sequence(samples):
+    """Create a musical sequence from the generated sound samples."""
     sequence = np.zeros(int(SAMPLE_RATE * SEQUENCE_LENGTH))
-    sound_files = [f for f in os.listdir(TEMP_DIR) if f.endswith('.wav')]
     
     for i in range(SEQUENCE_LENGTH):
-        sound_idx = np.random.randint(len(sound_files))
-        sound_file = os.path.join(TEMP_DIR, sound_files[sound_idx])
-        _, sound_data = scipy.io.wavfile.read(sound_file)
+        sound_idx = np.random.randint(len(samples))
+        samples[sound_idx].seek(0)
+        _, sound_data = scipy.io.wavfile.read(samples[sound_idx])
         
         start_idx = int(i * SAMPLE_RATE)
         end_idx = start_idx + len(sound_data)
@@ -150,26 +151,13 @@ def create_musical_sequence():
             sequence[start_idx:end_idx] += sound_data
         
     sequence = np.int16(sequence / np.max(np.abs(sequence)) * 32767)
-    write('musical_sequence.wav', SAMPLE_RATE, sequence)
+    buffer = io.BytesIO()
+    write(buffer, SAMPLE_RATE, sequence)
+    buffer.seek(0)
+    return buffer
 
-def zip_audio_files(zip_filename):
-    """Zip the generated audio files and the musical sequence."""
-    with zipfile.ZipFile(zip_filename, 'w') as zipf:
-        for root, _, files in os.walk(TEMP_DIR):
-            for file in files:
-                zipf.write(os.path.join(root, file), file)
-        zipf.write('musical_sequence.wav', 'musical_sequence.wav')
-                
-def main():
-    create_audio_files()
-    create_musical_sequence()
-    zip_audio_files('sound_effects_and_sequence.zip')
-    
-    # Clean up
-    for file in os.listdir(TEMP_DIR):
-        os.remove(os.path.join(TEMP_DIR, file))
-    os.rmdir(TEMP_DIR)
-    os.remove('musical_sequence.wav')
-
-if __name__ == "__main__":
-    main()
+def generate_random_samples_and_sequence():
+    """Generate random samples and a musical sequence, return as BytesIO objects."""
+    samples = create_random_samples()
+    sequence = create_musical_sequence(samples)
+    return samples, sequence
