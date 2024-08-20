@@ -5,3 +5,5 @@ matplotlib
 soundfile
 librosa
 pydub
+replicate
+requests
