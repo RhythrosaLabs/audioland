@@ -4,7 +4,8 @@ import soundfile as sf
 import io
 from scipy import signal
 import matplotlib.pyplot as plt
-from random_samples import generate_random_samples_and_sequence  # Import the new function
+from random_samples import generate_random_samples_and_sequence
+from drum_loop_generator import DrumLoopGenerator  # Import the new class
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
@@ -87,7 +88,7 @@ def list_saved_sounds():
 st.title("AI-Powered Sound Design Suite")
 
 # Tabs
-tab1, tab2, tab3 = st.tabs(["Sound Generator", "Sound Library", "Random Samples"])
+tab1, tab2, tab3, tab4 = st.tabs(["Sound Generator", "Sound Library", "Random Samples", "Drum Loop Generator"])
 
 with tab1:
     st.header("Waveform Generator")
@@ -192,6 +193,28 @@ with tab3:
             mime="audio/wav"
         )
 
+with tab4:
+    st.header("Drum Loop Generator")
+    
+    tempo = st.slider("Tempo (BPM)", 60, 200, 120)
+    beat_length = st.slider("Beat Length", 4, 32, 16)
+    
+    if st.button("Generate Drum Loop"):
+        with st.spinner("Generating drum loop..."):
+            generator = DrumLoopGenerator(tempo=tempo, beat_length=beat_length)
+            drum_loop = generator.generate_loop()
+        
+        st.success("Drum loop generated successfully!")
+        
+        # Display drum loop
+        st.audio(drum_loop, format='audio/wav')
+        st.download_button(
+            label="Download Drum Loop",
+            data=drum_loop,
+            file_name="drum_loop.wav",
+            mime="audio/wav"
+        )
+
 st.sidebar.title("Sound Design Suite")
-st.sidebar.info("Use the tabs to switch between generating sounds, accessing the sound library, and creating random samples.")
+st.sidebar.info("Use the tabs to switch between generating sounds, accessing the sound library, creating random samples, and generating drum loops.")
 st.sidebar.warning("This is a demo version with limited features.")
