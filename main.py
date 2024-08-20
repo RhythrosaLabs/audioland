@@ -4,19 +4,43 @@ import soundfile as sf
 import io
 from scipy import signal
 import matplotlib.pyplot as plt
-import os
 import librosa
-import sounddevice as sd
 from pydub import AudioSegment
 from pydub.effects import compress_dynamic_range
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
 
-# Custom CSS for dark theme (same as before)
+# Custom CSS for dark theme
 st.markdown("""
 <style>
-    /* ... (previous CSS remains the same) ... */
+    .stApp {
+        background-color: #0E1117;
+        color: #FAFAFA;
+    }
+    .stTabs {
+        background-color: #262730;
+        padding: 20px;
+        border-radius: 10px;
+    }
+    .stButton>button {
+        width: 100%;
+        background-color: #4CAF50;
+        color: white;
+    }
+    .stSlider>div>div>div {
+        background-color: #4CAF50;
+    }
+    .stSelectbox>div>div {
+        background-color: #262730;
+        color: #FAFAFA;
+    }
+    .css-145kmo2 {
+        color: #FAFAFA;
+    }
+    .css-1d391kg {
+        background-color: #262730;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -28,7 +52,7 @@ if 'mixer_tracks' not in st.session_state:
 if 'sequence' not in st.session_state:
     st.session_state.sequence = []
 
-# Sound generation functions (same as before)
+# Sound generation functions
 def generate_sine_wave(frequency, duration, sample_rate=44100):
     t = np.linspace(0, duration, int(sample_rate * duration), False)
     return np.sin(2 * np.pi * frequency * t)
@@ -60,7 +84,7 @@ def apply_envelope(audio, attack, decay, sustain, release):
     
     return audio * envelope
 
-# New functions for effects
+# Effects functions
 def apply_delay(audio, delay_time, feedback, mix, sample_rate=44100):
     delay_samples = int(delay_time * sample_rate)
     delayed = np.zeros_like(audio)
@@ -80,6 +104,20 @@ def save_to_library(name, audio, sample_rate):
 # Function to load audio from library
 def load_from_library(name):
     return st.session_state.library[name]['audio'], st.session_state.library[name]['sample_rate']
+
+# Plot waveform function
+def plot_waveform(audio, sample_rate):
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(10, 4))
+    time = np.arange(0, len(audio)) / sample_rate
+    ax.plot(time, audio, color='#4CAF50')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Amplitude')
+    ax.set_title('Waveform')
+    ax.grid(True, color='#555555')
+    fig.patch.set_facecolor('#0E1117')
+    ax.set_facecolor('#262730')
+    return fig
 
 # Main app
 st.title("AI-Powered Sound Design Suite")
@@ -222,8 +260,8 @@ with tab4:
                                                         list(st.session_state.library.keys()).index(st.session_state.sequence[i]) + 1,
                                                         key=f"seq_{i}")
     
-    # Transport controls
-    if st.button("Play Sequence"):
+    # Sequence playback (without real-time audio)
+    if st.button("Generate Sequence"):
         sequence_audio = []
         for step in st.session_state.sequence:
             if step:
@@ -234,9 +272,24 @@ with tab4:
         
         full_sequence = np.concatenate(sequence_audio)
         
-        # Play the sequence
-        sd.play(full_sequence, 44100)
-        sd.wait()
+        # Normalize the sequence
+        full_sequence = full_sequence / np.max(np.abs(full_sequence))
+        
+        # Create a buffer for the sequence
+        buffer = io.BytesIO()
+        sf.write(buffer, full_sequence, 44100, format='WAV')
+        buffer.seek(0)
+        
+        # Display audio player for the sequence
+        st.audio(buffer, format='audio/wav')
+        
+        # Provide download link for the sequence
+        st.download_button(
+            label="Download Sequence",
+            data=buffer,
+            file_name="sequence.wav",
+            mime="audio/wav"
+        )
 
 st.sidebar.title("Sound Design Suite")
 st.sidebar.info("Use the tabs to navigate between different features of the suite.")
