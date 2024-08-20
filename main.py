@@ -32,6 +32,9 @@ def custom_reverb(audio, delay=100):
 
 # Function to apply effects to audio
 def apply_effects(music_path, effects):
+    if not os.path.exists(music_path):
+        st.error("Music file not found.")
+        return None
     audio = AudioSegment.from_file(music_path)
     for effect in effects:
         if effect == "reverb":
@@ -119,8 +122,11 @@ if st.session_state.music_url:
         st.write("Applying effects...")
         with st.spinner("Please wait..."):
             processed_music_path = apply_effects(st.session_state.music_url, effects)
-            st.write("Effects applied successfully!")
-            st.audio(processed_music_path, format=f'audio/{output_format}')
+            if processed_music_path:
+                st.write("Effects applied successfully!")
+                st.audio(processed_music_path, format=f'audio/{output_format}')
 
-            # Export post-production result
-            save_and_download_file(processed_music_path)
+                # Export post-production result
+                save_and_download_file(processed_music_path)
+            else:
+                st.error("Failed to apply effects.")
