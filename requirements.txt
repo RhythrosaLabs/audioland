@@ -8,3 +8,5 @@ pydub
 replicate
 requests
 sounddevice
+random
+mido
