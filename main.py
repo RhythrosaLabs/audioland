@@ -38,7 +38,6 @@ if 'sounds' not in st.session_state:
 if 'replicate_api_key' not in st.session_state:
     st.session_state.replicate_api_key = ''
 
-
 # Sound generation functions
 def generate_sine_wave(frequency, duration, sample_rate=44100):
     t = np.linspace(0, duration, int(sample_rate * duration), False)
@@ -91,14 +90,13 @@ def load_sound(name):
 def list_saved_sounds():
     return list(st.session_state.sounds.keys())
 
-# New functions for generative AI audio
+# AI Music Generator functions
 def load_api_key():
     return st.session_state.replicate_api_key
 
 def save_api_key(api_key):
     st.session_state.replicate_api_key = api_key
     os.environ["REPLICATE_API_TOKEN"] = api_key
-
 
 def download_file(url, filename):
     response = requests.get(url)
@@ -113,9 +111,10 @@ def download_file(url, filename):
 def generate_music(input_text, duration, model):
     api_key = load_api_key()
     if not api_key:
-        st.error("Please enter your Replicate API key in the sidebar.")
+        st.error("Please enter your Replicate API key in the sidebar and click 'Save API Key'.")
         return
 
+    # Ensure the API key is set in the environment
     os.environ["REPLICATE_API_TOKEN"] = api_key
 
     model_input = {
@@ -130,7 +129,10 @@ def generate_music(input_text, duration, model):
 
     try:
         with st.spinner("Generating music... This may take a while."):
-            output = replicate.run(model_id, input=model_input)
+            # Create a new Replicate client with the API key
+            client = replicate.Client(api_token=api_key)
+            output = client.run(model_id, input=model_input)
+            
             if isinstance(output, list) and len(output) > 0:
                 download_url = output[0]
             else:
@@ -151,6 +153,7 @@ def generate_music(input_text, duration, model):
                 st.error("Failed to download the generated audio file.")
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
+        st.error("Please check that your API key is correct and that you have the necessary permissions.")
 
 # Main app
 st.title("AI-Powered Sound Design Suite")
@@ -164,7 +167,6 @@ if st.sidebar.button("Save API Key"):
 
 # Tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Sound Generator", "Sound Library", "Random Samples", "Drum Loop Generator", "AI Music Generator"])
-
 
 with tab1:
     st.header("Waveform Generator")
@@ -293,6 +295,8 @@ with tab4:
 
 with tab5:
     st.header("AI Music Generator")
+    
+    st.warning("Make sure you've entered and saved your Replicate API key in the sidebar before generating music.")
     
     input_text = st.text_area("Enter a prompt for the music:", "An upbeat electronic dance track with a catchy melody")
     duration = st.slider("Duration (seconds)", 5, 60, 30)
