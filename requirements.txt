@@ -2,4 +2,3 @@ streamlit
 replicate
 requests
 pydub
-ffmpeg-python
