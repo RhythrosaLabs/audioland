@@ -1,8 +1,7 @@
-streamlit
-numpy
-scipy
-matplotlib
-soundfile
-librosa
-sounddevice
-pydub
+streamlit==1.22.0
+numpy==1.24.3
+scipy==1.10.1
+matplotlib==3.7.1
+soundfile==0.12.1
+librosa==0.10.0
+pydub==0.25.1
