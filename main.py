@@ -97,6 +97,8 @@ def load_api_key():
 
 def save_api_key(api_key):
     st.session_state.replicate_api_key = api_key
+    os.environ["REPLICATE_API_TOKEN"] = api_key
+
 
 def download_file(url, filename):
     response = requests.get(url)
