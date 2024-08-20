@@ -1,4 +1,4 @@
 streamlit
-replicate
-requests
-pydub
+numpy
+scipy
+soundfile
