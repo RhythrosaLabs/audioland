@@ -8,7 +8,8 @@ from pydub.effects import normalize
 
 # Function to generate music using Replicate's meta/musicgen model
 def generate_music(api_key, prompt, model_version, output_format, normalization_strategy):
-    replicate.Client(api_token=api_key)
+    # Initialize Replicate client with the provided API key
+    client = replicate.Client(api_token=api_key)
     
     input = {
         "prompt": prompt,
@@ -17,12 +18,15 @@ def generate_music(api_key, prompt, model_version, output_format, normalization_
         "normalization_strategy": normalization_strategy,
     }
     
-    output = replicate.run(
-        "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
-        input=input
-    )
-    
-    return output
+    try:
+        output = client.run(
+            "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
+            input=input
+        )
+        return output
+    except replicate.exceptions.ReplicateError as e:
+        st.error(f"An error occurred: {e.detail}")
+        return None
 
 # Custom reverb effect function
 def custom_reverb(audio, delay=100):
