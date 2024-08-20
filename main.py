@@ -1,11 +1,13 @@
 import streamlit as st
 import numpy as np
+import soundfile as sf
+import io
 from scipy import signal
 import matplotlib.pyplot as plt
-import io
+import os
 
 # Set page config
-st.set_page_config(page_title="Simple Sound Design Suite", layout="wide")
+st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
 
 # Custom CSS for dark theme
 st.markdown("""
@@ -25,6 +27,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Sound generation functions
 def generate_sine_wave(frequency, duration, sample_rate=44100):
     t = np.linspace(0, duration, int(sample_rate * duration), False)
     return np.sin(2 * np.pi * frequency * t)
@@ -56,6 +59,7 @@ def apply_envelope(audio, attack, decay, sustain, release):
     
     return audio * envelope
 
+# Plot waveform function
 def plot_waveform(audio, sample_rate):
     plt.figure(figsize=(10, 4))
     plt.plot(np.linspace(0, len(audio) / sample_rate, len(audio)), audio)
@@ -63,49 +67,101 @@ def plot_waveform(audio, sample_rate):
     plt.xlabel('Time (seconds)')
     plt.ylabel('Amplitude')
     plt.ylim(-1, 1)
-    
-    # Save plot to a buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close()
-    
-    return buf
+    return plt
+
+# Directory functions
+def save_sound(name, audio, sample_rate):
+    if not os.path.exists('sounds'):
+        os.makedirs('sounds')
+    sf.write(f'sounds/{name}.wav', audio, sample_rate)
+
+def load_sound(name):
+    return sf.read(f'sounds/{name}.wav')
+
+def list_saved_sounds():
+    if not os.path.exists('sounds'):
+        return []
+    return [f.split('.')[0] for f in os.listdir('sounds') if f.endswith('.wav')]
 
 # Main app
-st.title("Simple Sound Design Suite")
+st.title("AI-Powered Sound Design Suite")
 
-st.header("Waveform Generator")
+# Tabs
+tab1, tab2 = st.tabs(["Sound Generator", "Sound Directory"])
 
-waveform = st.selectbox("Select Waveform", ["Sine", "Square", "Sawtooth"])
-frequency = st.slider("Frequency (Hz)", 20, 2000, 440)
-duration = st.slider("Duration (seconds)", 0.1, 5.0, 1.0)
+with tab1:
+    st.header("Waveform Generator")
 
-st.subheader("Envelope Settings")
-attack = st.slider("Attack", 0.0, 1.0, 0.1)
-decay = st.slider("Decay", 0.0, 1.0, 0.1)
-sustain = st.slider("Sustain", 0.0, 1.0, 0.5)
-release = st.slider("Release", 0.0, 1.0, 0.3)
+    waveform = st.selectbox("Select Waveform", ["Sine", "Square", "Sawtooth"])
+    frequency = st.slider("Frequency (Hz)", 20, 2000, 440)
+    duration = st.slider("Duration (seconds)", 0.1, 5.0, 1.0)
 
-if st.button("Generate Waveform"):
-    if waveform == "Sine":
-        audio = generate_sine_wave(frequency, duration)
-    elif waveform == "Square":
-        audio = generate_square_wave(frequency, duration)
+    st.subheader("Envelope Settings")
+    attack = st.slider("Attack", 0.0, 1.0, 0.1)
+    decay = st.slider("Decay", 0.0, 1.0, 0.1)
+    sustain = st.slider("Sustain", 0.0, 1.0, 0.5)
+    release = st.slider("Release", 0.0, 1.0, 0.3)
+
+    if st.button("Generate Sound"):
+        if waveform == "Sine":
+            audio = generate_sine_wave(frequency, duration)
+        elif waveform == "Square":
+            audio = generate_square_wave(frequency, duration)
+        else:
+            audio = generate_sawtooth_wave(frequency, duration)
+        
+        audio = apply_envelope(audio, attack, decay, sustain, release)
+        
+        # Normalize audio
+        audio = audio / np.max(np.abs(audio))
+        
+        # Save audio to a BytesIO object
+        buffer = io.BytesIO()
+        sf.write(buffer, audio, 44100, format='WAV')
+        buffer.seek(0)
+        
+        # Display audio player
+        st.audio(buffer, format='audio/wav')
+        
+        # Provide download link
+        st.download_button(
+            label="Download WAV",
+            data=buffer,
+            file_name="generated_sound.wav",
+            mime="audio/wav"
+        )
+
+        # Plot waveform
+        st.pyplot(plot_waveform(audio, 44100))
+
+        # Save to directory option
+        save_name = st.text_input("Save to directory as:")
+        if st.button("Save to Directory"):
+            save_sound(save_name, audio, 44100)
+            st.success(f"Saved {save_name} to directory!")
+
+with tab2:
+    st.header("Sound Directory")
+    
+    saved_sounds = list_saved_sounds()
+    if saved_sounds:
+        selected_sound = st.selectbox("Select a saved sound", saved_sounds)
+        if st.button("Load Sound"):
+            audio, sample_rate = load_sound(selected_sound)
+            
+            # Create a buffer for the loaded sound
+            buffer = io.BytesIO()
+            sf.write(buffer, audio, sample_rate, format='WAV')
+            buffer.seek(0)
+            
+            # Display audio player for the loaded sound
+            st.audio(buffer, format='audio/wav')
+            
+            # Plot waveform of the loaded sound
+            st.pyplot(plot_waveform(audio, sample_rate))
     else:
-        audio = generate_sawtooth_wave(frequency, duration)
-    
-    audio = apply_envelope(audio, attack, decay, sustain, release)
-    
-    # Normalize audio
-    audio = audio / np.max(np.abs(audio))
-    
-    # Plot waveform
-    waveform_plot = plot_waveform(audio, 44100)
-    st.image(waveform_plot)
-    
-    st.write("Note: Audio playback is not available in this simplified version.")
+        st.write("No saved sounds found in the directory.")
 
-st.sidebar.title("Simple Sound Design Suite")
-st.sidebar.info("Use the controls to generate and visualize different waveforms.")
-st.sidebar.warning("This is a simplified version with limited features.")
+st.sidebar.title("Sound Design Suite")
+st.sidebar.info("Use the tabs to switch between generating sounds and accessing the sound directory.")
+st.sidebar.warning("This is a demo version with limited features.")
