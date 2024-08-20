@@ -3,9 +3,14 @@ import replicate
 import requests
 import tempfile
 import os
+from pydub import AudioSegment
+from pydub.effects import normalize, reverb, high_pass_filter, low_pass_filter
+import ffmpeg
 
 # Function to generate music using Replicate's meta/musicgen model
 def generate_music(api_key, prompt, model_version, output_format, normalization_strategy):
+    replicate.Client(api_token=api_key)
+    
     input = {
         "prompt": prompt,
         "model_version": model_version,
@@ -15,17 +20,34 @@ def generate_music(api_key, prompt, model_version, output_format, normalization_
     
     output = replicate.run(
         "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
-        input=input,
-        api_token=api_key
+        input=input
     )
     
     return output
 
-# Function to apply effects (dummy implementation)
+# Function to apply effects to audio
 def apply_effects(music_path, effects):
-    # For demonstration purposes, this function just returns the original music path.
-    # You would need to implement actual audio processing here.
-    return music_path
+    # Load the audio file using pydub
+    audio = AudioSegment.from_file(music_path)
+
+    # Apply selected effects
+    for effect in effects:
+        if effect == "reverb":
+            audio = reverb(audio)
+        if effect == "echo":
+            audio = audio + audio.reverse().overlay(audio.reverse(), delay=100)
+        if effect == "distortion":
+            audio = audio + 10  # Increase volume for distortion
+            audio = low_pass_filter(audio, 800)  # Low-pass filter for distortion effect
+    
+    # Normalize the audio to avoid clipping
+    audio = normalize(audio)
+
+    # Save processed audio to a temporary file
+    processed_music_path = tempfile.mktemp(suffix=".mp3")
+    audio.export(processed_music_path, format="mp3")
+
+    return processed_music_path
 
 # Function to save and download the file
 def save_and_download_file(file_path):
@@ -55,47 +77,51 @@ if st.button("Generate Music"):
     elif text_prompt:
         st.write("Generating music...")
         with st.spinner("Please wait..."):
-            # Generate music
-            music_url = generate_music(
-                replicate_api_key,
-                text_prompt,
-                model_version,
-                output_format,
-                normalization_strategy
-            )
-            if music_url:
-                st.write("Music generated successfully!")
+            try:
+                # Generate music
+                music_url = generate_music(
+                    replicate_api_key,
+                    text_prompt,
+                    model_version,
+                    output_format,
+                    normalization_strategy
+                )
                 
-                # Download the generated music
-                music_path = tempfile.mktemp(suffix=f".{output_format}")
-                response = requests.get(music_url)
-                with open(music_path, 'wb') as f:
-                    f.write(response.content)
-                
-                st.audio(music_path, format=f'audio/{output_format}')
+                if music_url:
+                    st.write("Music generated successfully!")
+                    
+                    # Download the generated music
+                    music_path = tempfile.mktemp(suffix=f".{output_format}")
+                    response = requests.get(music_url)
+                    with open(music_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    st.audio(music_path, format=f'audio/{output_format}')
 
-                # Apply effects
-                st.write("Apply effects:")
-                effects = []
-                if st.checkbox("Reverb"):
-                    effects.append("reverb")
-                if st.checkbox("Echo"):
-                    effects.append("echo")
-                if st.checkbox("Distortion"):
-                    effects.append("distortion")
+                    # Apply effects
+                    st.write("Apply effects:")
+                    effects = []
+                    if st.checkbox("Reverb"):
+                        effects.append("reverb")
+                    if st.checkbox("Echo"):
+                        effects.append("echo")
+                    if st.checkbox("Distortion"):
+                        effects.append("distortion")
 
-                if effects:
-                    st.write("Applying effects...")
-                    with st.spinner("Please wait..."):
-                        # Apply effects (dummy implementation)
-                        processed_music_path = apply_effects(music_path, effects)
-                        st.write("Effects applied successfully!")
-                        st.audio(processed_music_path, format=f'audio/{output_format}')
+                    if effects:
+                        st.write("Applying effects...")
+                        with st.spinner("Please wait..."):
+                            # Apply effects
+                            processed_music_path = apply_effects(music_path, effects)
+                            st.write("Effects applied successfully!")
+                            st.audio(processed_music_path, format=f'audio/{output_format}')
 
-                        # Export post-production result
-                        save_and_download_file(processed_music_path)
-            else:
-                st.error("Failed to generate music. Please try again.")
+                            # Export post-production result
+                            save_and_download_file(processed_music_path)
+                else:
+                    st.error("Failed to generate music. Please try again.")
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
     else:
         st.error("Please enter a music prompt.")
 
