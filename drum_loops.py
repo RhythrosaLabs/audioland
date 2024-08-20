@@ -1,9 +1,7 @@
-# drum_loop_generator.py
-# DrumLoopGenerator class for generating drum loops
-
 import random
 from pydub import AudioSegment
 from pydub.generators import Sine, WhiteNoise
+import io
 
 class DrumLoopGenerator:
     def __init__(self, tempo=120, beat_length=16):
@@ -33,10 +31,9 @@ class DrumLoopGenerator:
     def _generate_silence(self):
         return AudioSegment.silent(duration=100)
 
-    def generate_loop(self, filename):
+    def generate_loop(self):
         beat_duration = 60000 // self.tempo
         loop = AudioSegment.silent(duration=beat_duration * self.beat_length)
-
         for i in range(self.beat_length):
             if i % 4 == 0:
                 loop = loop.overlay(self._generate_kick(), position=i * beat_duration)
@@ -46,10 +43,13 @@ class DrumLoopGenerator:
                 loop = loop.overlay(self._generate_hihat(), position=i * beat_duration)
             if random.random() > 0.85:
                 loop = loop.overlay(self._generate_tom(), position=i * beat_duration)
-
-        loop.export(filename, format='wav')
+        
+        buffer = io.BytesIO()
+        loop.export(buffer, format='wav')
+        buffer.seek(0)
+        return buffer
 
 # Example usage
 if __name__ == "__main__":
     generator = DrumLoopGenerator()
-    generator.generate_loop("drum_loop.wav")
+    generator.generate_loop()
