@@ -10,6 +10,7 @@ import os
 import replicate
 from datetime import datetime
 import requests
+import shutil
 import librosa
 import threading
 import time
@@ -18,6 +19,7 @@ import mido
 from mido import Message, MidiFile, MidiTrack
 import random
 
+
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
 
@@ -25,31 +27,23 @@ st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
 st.markdown("""
 <style>
     .stApp {
-        background-color: #1E1E1E;
+        background-color: #0E1117;
         color: #FAFAFA;
     }
     .stButton>button {
+        width: 100%;
         background-color: #4CAF50;
         color: white;
     }
     .stSlider>div>div>div {
         background-color: #4CAF50;
     }
-    .mixer-channel {
-        background-color: #2E2E2E;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-    }
-    .mixer-fader {
-        height: 200px;
-    }
-    .transport-controls {
+    .global-transport {
         position: fixed;
-        top: 0;
+        bottom: 0;
         left: 0;
         width: 100%;
-        background-color: #2E2E2E;
+        background-color: #1E1E1E;
         padding: 10px;
         z-index: 1000;
     }
@@ -72,9 +66,7 @@ if 'mixer_channels' not in st.session_state:
         'distortion': 0.0,
         'low_pass': 22050,
         'high_pass': 20,
-        'reverse': False,
-        'mute': False,
-        'solo': False
+        'reverse': False
     } for _ in range(8)]
 if 'playback' not in st.session_state:
     st.session_state.playback = {
@@ -85,6 +77,18 @@ if 'playback' not in st.session_state:
         'loop': False,
         'bpm': 120
     }
+
+# Create working directory
+WORK_DIR = "audio_files"
+os.makedirs(WORK_DIR, exist_ok=True)
+
+# Autosave function
+def autosave_audio(audio, sample_rate, prefix):
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{prefix}_{timestamp}.wav"
+    filepath = os.path.join(WORK_DIR, filename)
+    sf.write(filepath, audio, sample_rate)
+    return filepath
 
 # Sound generation functions
 def generate_sine_wave(frequency, duration, sample_rate=44100):
@@ -146,12 +150,23 @@ def save_api_key(api_key):
     st.session_state.replicate_api_key = api_key
     os.environ["REPLICATE_API_TOKEN"] = api_key
 
+def download_file(url, filename):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(filename, 'wb') as f:
+            f.write(response.content)
+        return True
+    else:
+        st.error(f"Failed to download file: {response.status_code}")
+        return False
+
 def generate_music(input_text, duration, model):
     api_key = load_api_key()
     if not api_key:
         st.error("Please enter your Replicate API key in the sidebar and click 'Save API Key'.")
         return
 
+    # Ensure the API key is set in the environment
     os.environ["REPLICATE_API_TOKEN"] = api_key
 
     model_input = {
@@ -166,6 +181,7 @@ def generate_music(input_text, duration, model):
 
     try:
         with st.spinner("Generating music... This may take a while."):
+            # Create a new Replicate client with the API key
             client = replicate.Client(api_token=api_key)
             output = client.run(model_id, input=model_input)
             
@@ -174,23 +190,23 @@ def generate_music(input_text, duration, model):
             else:
                 download_url = output
             
-            response = requests.get(download_url)
-            if response.status_code == 200:
-                audio_data = response.content
-                st.audio(audio_data, format='audio/wav')
-                st.download_button(
-                    label="Download Generated Music",
-                    data=audio_data,
-                    file_name="generated_music.wav",
-                    mime="audio/wav"
-                )
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            sanitized_input_text = "".join(e for e in input_text if e.isalnum())
+            filename = f"{sanitized_input_text[:30]}_{timestamp}.wav"
+            
+            if download_file(download_url, filename):
+                st.success(f"Music generated and saved as {filename}")
+                
+                # Load and play the generated audio
+                audio_file = open(filename, 'rb')
+                audio_bytes = audio_file.read()
+                st.audio(audio_bytes, format='audio/wav')
             else:
                 st.error("Failed to download the generated audio file.")
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.error("Please check that your API key is correct and that you have the necessary permissions.")
 
-# Mixer functions
 def load_audio_file(file):
     audio, sample_rate = librosa.load(file, sr=None, mono=False)
     return audio, sample_rate
@@ -236,14 +252,12 @@ def apply_high_pass(audio, sample_rate, cutoff):
 def apply_reverse(audio):
     return audio[::-1]
 
-def mix_audio(channels, master_volume):
+def mix_audio(channels):
     max_length = max(len(ch['audio']) for ch in channels if ch['audio'] is not None)
     mixed_audio = np.zeros((max_length, 2))
     
-    solo_channels = [ch for ch in channels if ch['solo']]
-    
     for ch in channels:
-        if ch['audio'] is not None and (not ch['mute']) and (not solo_channels or ch['solo']):
+        if ch['audio'] is not None:
             audio = ch['audio']
             sample_rate = ch['sample_rate']
 
@@ -268,9 +282,6 @@ def mix_audio(channels, master_volume):
             
             mixed_audio += audio
     
-    # Apply master volume
-    mixed_audio *= master_volume
-    
     # Normalize the mixed audio
     mixed_audio = mixed_audio / np.max(np.abs(mixed_audio))
     return mixed_audio
@@ -279,6 +290,8 @@ def mix_audio(channels, master_volume):
 def play_audio():
     if st.session_state.playback['audio'] is not None:
         st.session_state.playback['is_playing'] = True
+        # Instead of playing audio, we'll just update the state
+        # The audio will be played using Streamlit's audio component
 
 def pause_audio():
     st.session_state.playback['is_playing'] = False
@@ -296,9 +309,9 @@ def update_position():
             else:
                 stop_audio()
         time.sleep(0.1)
-        st.experimental_rerun()
+        st.experimental_rerun()  # This will update the UI
 
-# MIDI generation function
+# Add this function for MIDI generation
 def generate_random_midi(num_notes=50, ticks_per_beat=480):
     mid = MidiFile()
     track = MidiTrack()
@@ -319,9 +332,10 @@ def generate_random_midi(num_notes=50, ticks_per_beat=480):
     
     return mid
 
+
 # Global transport UI
 def render_global_transport():
-    st.markdown('<div class="transport-controls">', unsafe_allow_html=True)
+    st.markdown('<div class="global-transport">', unsafe_allow_html=True)
     cols = st.columns([1, 1, 1, 2, 1])
     with cols[0]:
         if st.button("Play"):
@@ -344,9 +358,6 @@ def render_global_transport():
 # Main app
 st.title("AI-Powered Sound Design Suite")
 
-# Render global transport
-render_global_transport()
-
 # Sidebar for API key input
 st.sidebar.title("Settings")
 api_key = st.sidebar.text_input("Enter your Replicate API key:", type="password")
@@ -354,10 +365,9 @@ if st.sidebar.button("Save API Key"):
     save_api_key(api_key)
     st.sidebar.success("API key saved!")
 
-# Tabs
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "Sound Generator", "Sound Library", "Random Samples", 
-    "Drum Loop Generator", "AI Music Generator", "Mixer", "MIDI Generator"])
+
+# Modify the tabs section to include the new MIDI Generator tab
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Sound Generator", "Sound Library", "Random Samples", "Drum Loop Generator", "AI Music Generator", "Mixer", "MIDI Generator"])
 
 with tab1:
     st.header("Waveform Generator")
@@ -497,52 +507,40 @@ with tab5:
         generate_music(input_text, duration, model)
 
 with tab6:
-    st.header("8-Channel Mixer")
+    st.header("8-Channel Mixer with Effects")
     
-    # Master volume
-    master_volume = st.slider("Master Volume", 0.0, 1.0, 1.0, key="master_volume")
+    # BPM setting
+    st.session_state.playback['bpm'] = st.number_input("BPM", min_value=1, max_value=300, value=st.session_state.playback['bpm'])
     
-    # Create two columns for the channel strips
-    col1, col2 = st.columns(2)
-    
+    # Channel controls
     for i in range(8):
-        with col1 if i < 4 else col2:
-            st.markdown(f'<div class="mixer-channel">', unsafe_allow_html=True)
-            st.subheader(f"Channel {i+1}")
-            
-            # File upload
-            uploaded_file = st.file_uploader(f"Audio for channel {i+1}", type=['wav', 'mp3'], key=f"file_{i}")
+        st.subheader(f"Channel {i+1}")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            uploaded_file = st.file_uploader(f"Import audio for channel {i+1}", type=['wav', 'mp3'])
             if uploaded_file is not None:
-                st.session_state.mixer_channels[i]['file'] = uploaded_file
-                st.audio(uploaded_file, format='audio/wav')
-            
-            # Volume fader (vertical)
-            st.markdown('<div class="mixer-fader">', unsafe_allow_html=True)
-            st.session_state.mixer_channels[i]['volume'] = st.slider("", 0.0, 1.0, 1.0, key=f"vol_{i}", vertical=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Pan knob
-            st.session_state.mixer_channels[i]['pan'] = st.slider("Pan", -1.0, 1.0, 0.0, key=f"pan_{i}")
-            
-            # Mute and Solo buttons
-            col_mute, col_solo = st.columns(2)
-            with col_mute:
-                st.session_state.mixer_channels[i]['mute'] = st.checkbox("Mute", key=f"mute_{i}")
-            with col_solo:
-                st.session_state.mixer_channels[i]['solo'] = st.checkbox("Solo", key=f"solo_{i}")
-            
-            # Effects section (collapsible)
-            with st.expander("Effects"):
-                st.session_state.mixer_channels[i]['pitch_shift'] = st.slider("Pitch Shift", -12, 12, 0, key=f"pitch_{i}")
-                st.session_state.mixer_channels[i]['reverb'] = st.slider("Reverb", 0.0, 1.0, 0.0, key=f"reverb_{i}")
-                st.session_state.mixer_channels[i]['delay'] = st.slider("Delay", 0.0, 1.0, 0.0, key=f"delay_{i}")
-                st.session_state.mixer_channels[i]['distortion'] = st.slider("Distortion", 0.0, 1.0, 0.0, key=f"dist_{i}")
-                st.session_state.mixer_channels[i]['low_pass'] = st.slider("Low Pass (Hz)", 20, 22050, 22050, key=f"lp_{i}")
-                st.session_state.mixer_channels[i]['high_pass'] = st.slider("High Pass (Hz)", 20, 22050, 20, key=f"hp_{i}")
-                st.session_state.mixer_channels[i]['reverse'] = st.checkbox("Reverse", key=f"rev_{i}")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-
+                file_contents = uploaded_file.read()
+                with open(os.path.join(WORK_DIR, uploaded_file.name), 'wb') as f:
+                    f.write(file_contents)
+                st.session_state.mixer_channels[i]['file'] = os.path.join(WORK_DIR, uploaded_file.name)
+                st.success(f"File uploaded and saved: {uploaded_file.name}")
+        
+        with col2:
+            st.session_state.mixer_channels[i]['volume'] = st.slider(f"Volume {i+1}", 0.0, 1.0, 1.0, key=f"vol_{i}")
+        
+        with col3:
+            st.session_state.mixer_channels[i]['pan'] = st.slider(f"Pan {i+1}", -1.0, 1.0, 0.0, key=f"pan_{i}")
+        
+        # Effects
+        st.session_state.mixer_channels[i]['pitch_shift'] = st.slider(f"Pitch Shift {i+1} (semitones)", -12, 12, 0, key=f"pitch_{i}")
+        st.session_state.mixer_channels[i]['reverb'] = st.slider(f"Reverb {i+1}", 0.0, 1.0, 0.0, key=f"reverb_{i}")
+        st.session_state.mixer_channels[i]['delay'] = st.slider(f"Delay {i+1} (seconds)", 0.0, 1.0, 0.0, key=f"delay_{i}")
+        st.session_state.mixer_channels[i]['distortion'] = st.slider(f"Distortion {i+1}", 0.0, 1.0, 0.0, key=f"dist_{i}")
+        st.session_state.mixer_channels[i]['low_pass'] = st.slider(f"Low Pass {i+1} (Hz)", 20, 22050, 22050, key=f"lp_{i}")
+        st.session_state.mixer_channels[i]['high_pass'] = st.slider(f"High Pass {i+1} (Hz)", 20, 22050, 20, key=f"hp_{i}")
+        st.session_state.mixer_channels[i]['reverse'] = st.checkbox(f"Reverse {i+1}", key=f"rev_{i}")
+    
     if st.button("Mix Audio"):
         mixed_channels = []
         for ch in st.session_state.mixer_channels:
@@ -559,13 +557,13 @@ with tab6:
                     'distortion': ch['distortion'],
                     'low_pass': ch['low_pass'],
                     'high_pass': ch['high_pass'],
-                    'reverse': ch['reverse'],
-                    'mute': ch['mute'],
-                    'solo': ch['solo']
+                    'reverse': ch['reverse']
                 })
         
         if mixed_channels:
-            mixed_audio = mix_audio(mixed_channels, master_volume)
+            mixed_audio = mix_audio(mixed_channels)
+            mixed_filepath = autosave_audio(mixed_audio, sample_rate, "mixed_audio")
+            st.success(f"Mixed audio saved: {mixed_filepath}")
             
             # Update playback state
             st.session_state.playback['audio'] = mixed_audio
@@ -587,17 +585,11 @@ with tab6:
             
             # Display audio player for the mixed audio
             st.audio(buffer, format='audio/wav')
-            
-            # Provide download link for mixed audio
-            st.download_button(
-                label="Download Mixed Audio",
-                data=buffer,
-                file_name="mixed_audio.wav",
-                mime="audio/wav"
-            )
         else:
             st.warning("No audio files loaded in the mixer channels.")
 
+
+# Add this new tab for MIDI Generator
 with tab7:
     st.header("Random MIDI Generator")
     
@@ -607,20 +599,22 @@ with tab7:
         with st.spinner("Generating random MIDI sequence..."):
             midi_data = generate_random_midi(num_notes)
             
-            # Save MIDI to BytesIO
-            midi_buffer = io.BytesIO()
-            midi_data.save(file=midi_buffer)
-            midi_buffer.seek(0)
+            # Save MIDI file
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            midi_filename = f"random_midi_{timestamp}.mid"
+            midi_filepath = os.path.join(WORK_DIR, midi_filename)
+            midi_data.save(midi_filepath)
             
-            st.success("Random MIDI sequence generated successfully!")
+            st.success(f"Random MIDI sequence generated: {midi_filename}")
             
             # Provide download link
-            st.download_button(
-                label="Download MIDI File",
-                data=midi_buffer,
-                file_name="random_midi_sequence.mid",
-                mime="audio/midi"
-            )
+            with open(midi_filepath, "rb") as f:
+                st.download_button(
+                    label="Download MIDI File",
+                    data=f,
+                    file_name=midi_filename,
+                    mime="audio/midi"
+                )
             
             # Display MIDI information
             st.subheader("MIDI Sequence Information")
@@ -635,6 +629,10 @@ with tab7:
                     notes.append(f"Note: {msg.note}, Velocity: {msg.velocity}")
             for note in notes:
                 st.write(note)
+
+
+# Render global transport
+render_global_transport()
 
 st.sidebar.title("Sound Design Suite")
 st.sidebar.info("Use the tabs to switch between different sound design tools.")
