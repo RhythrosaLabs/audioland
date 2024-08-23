@@ -19,6 +19,16 @@ import mido
 from mido import Message, MidiFile, MidiTrack
 import random
 
+# Add this at the beginning of your script, after your imports and before the main app code:
+if 'cleanup_needed' not in st.session_state:
+    st.session_state.cleanup_needed = False
+
+if st.session_state.cleanup_needed:
+    if os.path.exists(WORK_DIR):
+        shutil.rmtree(WORK_DIR)
+    st.session_state.cleanup_needed = False
+
+
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
 
