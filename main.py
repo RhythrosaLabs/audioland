@@ -20,7 +20,7 @@ from drum_loop_generator import DrumLoopGenerator
 from random_samples import generate_random_samples_and_sequence
 
 # Set page config
-st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
+st.set_page_config(page_title="SOUNDSTORM", layout="wide")
 
 # Custom CSS for enhanced UI/UX
 st.markdown("""
