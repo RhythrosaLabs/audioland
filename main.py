@@ -3,8 +3,8 @@ import numpy as np
 import soundfile as sf
 import io
 from scipy import signal
-import matplotlib.pyplot as plt
 import os
+import matplotlib.pyplot as plt
 from datetime import datetime
 import requests
 import librosa
@@ -16,7 +16,6 @@ from mido import MidiFile, MidiTrack
 import random
 import plotly.graph_objs as go
 import plotly.express as px
-import base64
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
@@ -48,58 +47,37 @@ st.markdown("""
             background: linear-gradient(to right, #ff4b4b 0%, #ff1a1a 100%);
         }
 
-        .global-transport {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #1e1e1e;
-            padding: 10px;
-            z-index: 1000;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-        }
-
-        .transport-button {
+        .channel-fader {
+            height: 150px;
             background-color: #ff4b4b;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            padding: 15px;
-            font-size: 18px;
-            cursor: pointer;
+            border-radius: 4px;
         }
 
-        .transport-button:hover {
+        .channel {
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+            border-radius: 10px;
+            background-color: #1e1e1e;
+        }
+
+        .effects-button {
+            background-color: #ff4b4b;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        .effects-button:hover {
             background-color: #ff1a1a;
         }
 
-        .transport-slider input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-        }
-
-        .transport-slider input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-        }
-
-        .transport-slider input[type=range]:focus {
-            outline: none;
-        }
-
-        .transport-slider input[type=range]::-ms-track {
-            width: 100%;
-            cursor: pointer;
-            background: transparent;
-            border-color: transparent;
-            color: transparent;
-        }
-
-        .transport-slider {
-            flex-grow: 1;
-            margin: 0 20px;
+        .mixer-panel {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -141,7 +119,7 @@ init_session_state()
 WORK_DIR = "audio_files"
 os.makedirs(WORK_DIR, exist_ok=True)
 
-# Sound generation functions
+# Function to generate waveforms
 def generate_waveform(waveform_type, frequency, duration, sample_rate=44100):
     t = np.linspace(0, duration, int(sample_rate * duration), False)
     if waveform_type == 'Sine':
@@ -280,38 +258,53 @@ with tab5:
 
 with tab6:
     st.header("🎚️ 8-Channel Mixer with Effects")
-    st.session_state.playback['bpm'] = st.number_input("BPM", min_value=1, max_value=300, value=st.session_state.playback['bpm'])
+
+    # Mixer channels layout
+    st.markdown("<div class='mixer-panel'>", unsafe_allow_html=True)
 
     for i in range(8):
-        with st.expander(f"Channel {i+1}", expanded=False):
-            col1, col2 = st.columns([3, 1])
+        with st.container():
+            st.markdown("<div class='channel'>", unsafe_allow_html=True)
+            st.write(f"**Channel {i+1}**")
+
+            # File Upload
+            uploaded_file = st.file_uploader(f"Upload audio for Channel {i+1}", type=['wav', 'mp3'], key=f'file_{i}')
+            if uploaded_file:
+                file_path = os.path.join(WORK_DIR, uploaded_file.name)
+                with open(file_path, 'wb') as f:
+                    f.write(uploaded_file.getbuffer())
+                st.session_state.mixer_channels[i]['file'] = file_path
+                st.success(f"Loaded {uploaded_file.name}")
+
+            # Fader controls for volume
+            st.markdown("<div class='channel-fader'>", unsafe_allow_html=True)
+            st.slider(f"Volume {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['volume'], key=f"vol_{i}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Pan control
+            st.slider(f"Pan {i+1}", -1.0, 1.0, st.session_state.mixer_channels[i]['pan'], key=f"pan_{i}")
+
+            # Mute & Solo Buttons
+            col1, col2 = st.columns([1, 1])
             with col1:
-                uploaded_file = st.file_uploader(f"Upload audio for Channel {i+1}", type=['wav', 'mp3'], key=f'file_{i}')
-                if uploaded_file:
-                    file_path = os.path.join(WORK_DIR, uploaded_file.name)
-                    with open(file_path, 'wb') as f:
-                        f.write(uploaded_file.getbuffer())
-                    st.session_state.mixer_channels[i]['file'] = file_path
-                    st.success(f"Loaded {uploaded_file.name}")
-            with col2:
                 st.session_state.mixer_channels[i]['mute'] = st.checkbox("Mute", key=f"mute_{i}")
+            with col2:
                 st.session_state.mixer_channels[i]['solo'] = st.checkbox("Solo", key=f"solo_{i}")
 
-            st.session_state.mixer_channels[i]['volume'] = st.slider("Volume", 0.0, 1.0, st.session_state.mixer_channels[i]['volume'], key=f"vol_{i}")
-            st.session_state.mixer_channels[i]['pan'] = st.slider("Pan", -1.0, 1.0, st.session_state.mixer_channels[i]['pan'], key=f"pan_{i}")
+            # Effects (Reverb, Delay, Distortion, Pitch Shift)
+            if st.button("🎚️ Effects", key=f"effects_btn_{i}"):
+                with st.expander(f"Effects for Channel {i+1}"):
+                    st.session_state.mixer_channels[i]['reverb'] = st.slider(f"Reverb {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['reverb'], key=f"reverb_{i}")
+                    st.session_state.mixer_channels[i]['delay'] = st.slider(f"Delay {i+1} (seconds)", 0.0, 1.0, st.session_state.mixer_channels[i]['delay'], key=f"delay_{i}")
+                    st.session_state.mixer_channels[i]['distortion'] = st.slider(f"Distortion {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['distortion'], key=f"dist_{i}")
+                    st.session_state.mixer_channels[i]['pitch_shift'] = st.slider(f"Pitch Shift {i+1} (semitones)", -12, 12, st.session_state.mixer_channels[i]['pitch_shift'], key=f"pitch_{i}")
 
-            with st.expander("Effects"):
-                st.session_state.mixer_channels[i]['pitch_shift'] = st.slider("Pitch Shift (semitones)", -12, 12, st.session_state.mixer_channels[i]['pitch_shift'], key=f"pitch_{i}")
-                st.session_state.mixer_channels[i]['reverb'] = st.slider("Reverb", 0.0, 1.0, st.session_state.mixer_channels[i]['reverb'], key=f"reverb_{i}")
-                st.session_state.mixer_channels[i]['delay'] = st.slider("Delay (seconds)", 0.0, 1.0, st.session_state.mixer_channels[i]['delay'], key=f"delay_{i}")
-                st.session_state.mixer_channels[i]['distortion'] = st.slider("Distortion", 0.0, 1.0, st.session_state.mixer_channels[i]['distortion'], key=f"dist_{i}")
-                st.session_state.mixer_channels[i]['low_pass'] = st.slider("Low Pass (Hz)", 20, 22050, st.session_state.mixer_channels[i]['low_pass'], key=f"lp_{i}")
-                st.session_state.mixer_channels[i]['high_pass'] = st.slider("High Pass (Hz)", 20, 22050, st.session_state.mixer_channels[i]['high_pass'], key=f"hp_{i}")
-                st.session_state.mixer_channels[i]['reverse'] = st.checkbox("Reverse", key=f"rev_{i}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button("Mix Audio"):
         st.info("Mixing audio...")
-        # Mixing logic would go here
 
 with tab7:
     st.header("🎹 Random MIDI Generator")
