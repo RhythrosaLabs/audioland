@@ -15,7 +15,9 @@ import mido
 from mido import MidiFile, MidiTrack
 import random
 import plotly.graph_objs as go
-import plotly.express as px
+import replicate
+from drum_loop_generator import DrumLoopGenerator
+from random_samples import generate_random_samples_and_sequence
 
 # Set page config
 st.set_page_config(page_title="AI Sound Design Suite", layout="wide")
@@ -238,89 +240,168 @@ with tab2:
 
 with tab3:
     st.header("🎲 Random Samples Generator")
+    
     if st.button("Generate Random Samples"):
-        st.info("This feature is under development.")
+        with st.spinner("Generating random samples..."):
+            samples, sequence = generate_random_samples_and_sequence()
+        
+        st.success("Random samples generated successfully!")
+        
+        # Display individual samples
+        st.subheader("Individual Samples")
+        for i, sample in enumerate(samples):
+            st.audio(sample, format='audio/wav')
+            st.download_button(
+                label=f"Download Sample {i+1}",
+                data=sample,
+                file_name=f"random_sample_{i+1}.wav",
+                mime="audio/wav"
+            )
+        
+        # Display musical sequence
+        st.subheader("Musical Sequence")
+        st.audio(sequence, format='audio/wav')
+        st.download_button(
+            label="Download Musical Sequence",
+            data=sequence,
+            file_name="musical_sequence.wav",
+            mime="audio/wav"
+        )
 
 with tab4:
     st.header("🥁 Drum Loop Generator")
+    
     tempo = st.slider("Tempo (BPM)", 60, 200, 120)
     beat_length = st.slider("Beat Length", 4, 32, 16)
+    
     if st.button("Generate Drum Loop"):
-        st.info("This feature is under development.")
+        with st.spinner("Generating drum loop..."):
+            generator = DrumLoopGenerator(tempo=tempo, beat_length=beat_length)
+            drum_loop = generator.generate_loop()
+        
+        st.success("Drum loop generated successfully!")
+        
+        # Display drum loop
+        st.audio(drum_loop, format='audio/wav')
+        st.download_button(
+            label="Download Drum Loop",
+            data=drum_loop,
+            file_name="drum_loop.wav",
+            mime="audio/wav"
+        )
 
 with tab5:
     st.header("🤖 AI Music Generator")
-    st.warning("Ensure your Replicate API key is saved in the sidebar.")
-    input_text = st.text_area("Enter a prompt for the music:", "An epic orchestral piece with a cinematic feel")
+    
+    st.warning("Make sure you've entered and saved your Replicate API key in the sidebar before generating music.")
+    
+    input_text = st.text_area("Enter a prompt for the music:", "An upbeat electronic dance track with a catchy melody")
     duration = st.slider("Duration (seconds)", 5, 60, 30)
+    model = st.selectbox("Select AI Model", ["Meta MusicGen", "Loop Test"])
+    
+    def generate_music(input_text, duration, model):
+        api_key = st.session_state.replicate_api_key
+        if not api_key:
+            st.error("Please enter your Replicate API key in the sidebar.")
+            return
+
+        os.environ["REPLICATE_API_TOKEN"] = api_key
+
+        model_input = {
+            "prompt": input_text,
+            "duration": duration
+        }
+
+        if model == 'Meta MusicGen':
+            model_id = "meta/musicgen:7a76a8258b23fae65c5a22debb8841d1d7e816b75c2f24218cd2bd8573787906"
+        else:
+            model_id = "allenhung1025/looptest:0de4a5f14b9120ce02c590eb9cf6c94841569fafbc4be7ab37436ce738bcf49f"
+
+        try:
+            with st.spinner("Generating music..."):
+                client = replicate.Client(api_token=api_key)
+                output = client.run(model_id, input=model_input)
+                download_url = output[0] if isinstance(output, list) else output
+
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                sanitized_input_text = "".join(e for e in input_text if e.isalnum())
+                filename = f"{sanitized_input_text[:30]}_{timestamp}.wav"
+                
+                response = requests.get(download_url)
+                if response.status_code == 200:
+                    with open(filename, 'wb') as f:
+                        f.write(response.content)
+                    st.success(f"Music generated and saved as {filename}")
+                    
+                    audio_file = open(filename, 'rb')
+                    audio_bytes = audio_file.read()
+                    st.audio(audio_bytes, format='audio/wav')
+                else:
+                    st.error(f"Failed to download the generated audio file. Status code: {response.status_code}")
+
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+
     if st.button("Generate Music"):
-        st.info("This feature is under development.")
+        generate_music(input_text, duration, model)
 
 with tab6:
     st.header("🎚️ 8-Channel Mixer with Effects")
 
-    # Mixer channels layout
-    st.markdown("<div class='mixer-panel'>", unsafe_allow_html=True)
+    st.session_state.playback['bpm'] = st.number_input("BPM", min_value=1, max_value=300, value=st.session_state.playback['bpm'])
 
     for i in range(8):
-        with st.container():
-            st.markdown("<div class='channel'>", unsafe_allow_html=True)
-            st.write(f"**Channel {i+1}**")
-
-            # File Upload
-            uploaded_file = st.file_uploader(f"Upload audio for Channel {i+1}", type=['wav', 'mp3'], key=f'file_{i}')
-            if uploaded_file:
-                file_path = os.path.join(WORK_DIR, uploaded_file.name)
-                with open(file_path, 'wb') as f:
-                    f.write(uploaded_file.getbuffer())
-                st.session_state.mixer_channels[i]['file'] = file_path
-                st.success(f"Loaded {uploaded_file.name}")
-
-            # Fader controls for volume
-            st.markdown("<div class='channel-fader'>", unsafe_allow_html=True)
-            st.slider(f"Volume {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['volume'], key=f"vol_{i}")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # Pan control
-            st.slider(f"Pan {i+1}", -1.0, 1.0, st.session_state.mixer_channels[i]['pan'], key=f"pan_{i}")
-
-            # Mute & Solo Buttons
-            col1, col2 = st.columns([1, 1])
+        with st.expander(f"Channel {i+1}", expanded=False):
+            col1, col2 = st.columns([3, 1])
             with col1:
-                st.session_state.mixer_channels[i]['mute'] = st.checkbox("Mute", key=f"mute_{i}")
+                uploaded_file = st.file_uploader(f"Upload audio for Channel {i+1}", type=['wav', 'mp3'], key=f'file_{i}')
+                if uploaded_file:
+                    file_path = os.path.join(WORK_DIR, uploaded_file.name)
+                    with open(file_path, 'wb') as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.session_state.mixer_channels[i]['file'] = file_path
+                    st.success(f"Loaded {uploaded_file.name}")
             with col2:
+                st.session_state.mixer_channels[i]['mute'] = st.checkbox("Mute", key=f"mute_{i}")
                 st.session_state.mixer_channels[i]['solo'] = st.checkbox("Solo", key=f"solo_{i}")
 
-            # Effects (Reverb, Delay, Distortion, Pitch Shift)
-            if st.button("🎚️ Effects", key=f"effects_btn_{i}"):
-                with st.expander(f"Effects for Channel {i+1}"):
-                    st.session_state.mixer_channels[i]['reverb'] = st.slider(f"Reverb {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['reverb'], key=f"reverb_{i}")
-                    st.session_state.mixer_channels[i]['delay'] = st.slider(f"Delay {i+1} (seconds)", 0.0, 1.0, st.session_state.mixer_channels[i]['delay'], key=f"delay_{i}")
-                    st.session_state.mixer_channels[i]['distortion'] = st.slider(f"Distortion {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['distortion'], key=f"dist_{i}")
-                    st.session_state.mixer_channels[i]['pitch_shift'] = st.slider(f"Pitch Shift {i+1} (semitones)", -12, 12, st.session_state.mixer_channels[i]['pitch_shift'], key=f"pitch_{i}")
+            st.session_state.mixer_channels[i]['volume'] = st.slider(f"Volume {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['volume'], key=f"vol_{i}")
+            st.session_state.mixer_channels[i]['pan'] = st.slider(f"Pan {i+1}", -1.0, 1.0, st.session_state.mixer_channels[i]['pan'], key=f"pan_{i}")
 
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
+            with st.expander("Effects"):
+                st.session_state.mixer_channels[i]['pitch_shift'] = st.slider(f"Pitch Shift {i+1} (semitones)", -12, 12, st.session_state.mixer_channels[i]['pitch_shift'], key=f"pitch_{i}")
+                st.session_state.mixer_channels[i]['reverb'] = st.slider(f"Reverb {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['reverb'], key=f"reverb_{i}")
+                st.session_state.mixer_channels[i]['delay'] = st.slider(f"Delay {i+1} (seconds)", 0.0, 1.0, st.session_state.mixer_channels[i]['delay'], key=f"delay_{i}")
+                st.session_state.mixer_channels[i]['distortion'] = st.slider(f"Distortion {i+1}", 0.0, 1.0, st.session_state.mixer_channels[i]['distortion'], key=f"dist_{i}")
+                st.session_state.mixer_channels[i]['low_pass'] = st.slider(f"Low Pass {i+1} (Hz)", 20, 22050, st.session_state.mixer_channels[i]['low_pass'], key=f"lp_{i}")
+                st.session_state.mixer_channels[i]['high_pass'] = st.slider(f"High Pass {i+1} (Hz)", 20, 22050, st.session_state.mixer_channels[i]['high_pass'], key=f"hp_{i}")
 
     if st.button("Mix Audio"):
         st.info("Mixing audio...")
 
 with tab7:
     st.header("🎹 Random MIDI Generator")
+    
     num_notes = st.slider("Number of Notes", 10, 100, 50)
+    
     if st.button("Generate Random MIDI"):
         mid = MidiFile()
         track = MidiTrack()
         mid.tracks.append(track)
-        for _ in range(num_notes):
-            note = random.randint(60, 72)
+        
+        track.append(mido.Message('program_change', program=random.randint(0, 127), time=0))
+        
+        for i in range(num_notes):
+            note = random.randint(60, 84)
             velocity = random.randint(64, 127)
-            time = random.randint(0, 480)
-            track.append(mido.Message('note_on', note=note, velocity=velocity, time=time))
-            track.append(mido.Message('note_off', note=note, velocity=0, time=time + 480))
+            duration = random.randint(240, 960)
+            track.append(mido.Message('note_on', note=note, velocity=velocity, time=0))
+            track.append(mido.Message('note_off', note=note, velocity=0, time=duration))
+        
         midi_bytes = io.BytesIO()
         mid.save(file=midi_bytes)
+        midi_bytes.seek(0)
+        
         st.download_button("Download MIDI", data=midi_bytes.getvalue(), file_name="random_midi.mid", mime="audio/midi")
 
 # Global transport controls
