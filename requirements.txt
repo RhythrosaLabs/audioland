@@ -9,3 +9,4 @@ replicate
 requests
 sounddevice
 mido
+plotly
