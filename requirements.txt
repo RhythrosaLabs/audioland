@@ -10,3 +10,5 @@ requests
 sounddevice
 mido
 plotly
+docker
+openai
